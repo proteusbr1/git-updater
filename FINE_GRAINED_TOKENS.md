@@ -96,10 +96,40 @@ Se você receber erro 403:
 
 1. Confirme se está usando o formato correto (marque/desmarque "Use Fine-grained Token")
 2. Verifique se o token não expirou
-3. Teste o token manualmente com curl:
+3. **Verifique os logs de debug**:
+   - Ative WP_DEBUG e WP_DEBUG_LOG
+   - Verifique `/wp-content/debug.log` para mensagens como:
+     ```
+     Git Updater - URL: https://api.github.com/repos/...
+     Git Updater - Credentials: Array([slug] => repo-name [token] => gh_xxx...)
+     Git Updater - Auth header: Bearer gh_xxx...
+     ```
+4. Teste o token manualmente com curl:
    ```bash
    curl -H "Authorization: Bearer YOUR_TOKEN" https://api.github.com/repos/owner/repo
    ```
+
+### Debug Step-by-Step
+
+Se ainda não funcionar:
+
+1. **Verifique se o repositório é detectado**:
+   - No log deve aparecer: `Git Updater - Credentials: Array([slug] => nome-do-repo)`
+   - Se `slug` estiver vazio, o repositório não está sendo detectado
+
+2. **Verifique se o token é aplicado**:
+   - No log deve aparecer: `Git Updater - Auth header: Bearer gh_xxx...`
+   - Se não aparecer, o token não está configurado corretamente
+
+3. **Teste a URL de download diretamente**:
+   ```bash
+   curl -H "Authorization: Bearer SEU_TOKEN" \
+        -L "https://api.github.com/repos/owner/repo/zipball/main"
+   ```
+
+4. **Configuração por repositório individual**:
+   - Se o token global não funcionar, configure especificamente para o repositório
+   - Use o campo individual + checkbox individual
 
 ## Migração de Tokens Clássicos
 

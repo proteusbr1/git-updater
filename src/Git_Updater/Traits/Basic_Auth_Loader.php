@@ -42,6 +42,12 @@ trait Basic_Auth_Loader {
 			$args = array_merge( $args, $this->add_accept_header( $args ) );
 		}
 		remove_filter( 'http_request_args', [ $this, 'download_package' ] );
+		
+		// Preserve authorization headers during redirects for private repos
+		if ( isset( $args['headers']['Authorization'] ) ) {
+			add_filter( 'http_request_redirection_count', [ $this, 'preserve_auth_on_redirect' ], 10, 2 );
+			add_filter( 'requests-requests.before_redirect', [ $this, 'preserve_auth_header' ], 10, 5 );
+		}
 
 		return $args;
 	}
@@ -58,6 +64,13 @@ trait Basic_Auth_Loader {
 	 */
 	final public function add_auth_header( $args, $url ) {
 		$credentials = $this->get_credentials( $url );
+		
+		// Debug logging
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'Git Updater - URL: ' . $url );
+			error_log( 'Git Updater - Credentials: ' . print_r( $credentials, true ) );
+		}
+		
 		if ( ! $credentials['isset'] || $credentials['api.wordpress'] ) {
 			return $args;
 		}
@@ -66,6 +79,11 @@ trait Basic_Auth_Loader {
 				$auth_format = $credentials['use_fine_grained'] ? 'Bearer ' : 'token ';
 				$args['headers']['Authorization'] = $auth_format . $credentials['token'];
 				$args['headers']['github']        = $credentials['slug'];
+				
+				// Debug logging
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					error_log( 'Git Updater - Auth header: ' . $args['headers']['Authorization'] );
+				}
 			}
 
 			/**
@@ -213,16 +231,41 @@ trait Basic_Auth_Loader {
 		// In case $type set from Base::$caller doesn't match.
 		if ( ! $slug && isset( $headers['path'] ) ) {
 			$path_arr = explode( '/', $headers['path'] );
-			foreach ( $path_arr as $key ) {
-				$key = basename( rawurldecode( $key ) ); // For GitLab.
-				if ( ! empty( $options[ $key ] ) || array_key_exists( $key, $repos ) ) {
-					$slug = $key;
-					break;
+			
+			// Special handling for GitHub zipball/tarball URLs
+			if ( isset( $headers['host'] ) && ( str_contains( $headers['host'], 'github' ) || str_contains( $headers['host'], 'codeload.github.com' ) ) ) {
+				// Pattern for api.github.com: /repos/owner/repo/zipball/branch
+				// $path_arr = ['', 'repos', 'owner', 'repo', 'zipball', 'branch']
+				if ( count( $path_arr ) >= 5 && in_array( $path_arr[4], [ 'zipball', 'tarball' ], true ) ) {
+					$repo_slug = $path_arr[3]; // Extract repo name
+					if ( ! empty( $options[ $repo_slug ] ) || array_key_exists( $repo_slug, $repos ) ) {
+						$slug = $repo_slug;
+					}
 				}
-				if ( isset( $this->type->gist_id ) ) {
-					if ( $key === $this->type->gist_id ) {
-						$slug = $this->type->slug;
+				
+				// Pattern for codeload.github.com: /owner/repo/legacy.zip/branch
+				// $path_arr = ['', 'owner', 'repo', 'legacy.zip', 'branch']
+				if ( str_contains( $headers['host'], 'codeload.github.com' ) && count( $path_arr ) >= 3 ) {
+					$repo_slug = $path_arr[2]; // Extract repo name
+					if ( ! empty( $options[ $repo_slug ] ) || array_key_exists( $repo_slug, $repos ) ) {
+						$slug = $repo_slug;
+					}
+				}
+			}
+			
+			// Fallback to original logic if not found
+			if ( ! $slug ) {
+				foreach ( $path_arr as $key ) {
+					$key = basename( rawurldecode( $key ) ); // For GitLab.
+					if ( ! empty( $options[ $key ] ) || array_key_exists( $key, $repos ) ) {
+						$slug = $key;
 						break;
+					}
+					if ( isset( $this->type->gist_id ) ) {
+						if ( $key === $this->type->gist_id ) {
+							$slug = $this->type->slug;
+							break;
+						}
 					}
 				}
 			}
@@ -318,5 +361,42 @@ trait Basic_Auth_Loader {
 		}
 
 		return $args;
+	}
+
+	/**
+		* Preserve authorization header during redirects.
+		*
+		* @param int   $redirect_count Number of redirects.
+		* @param array $r              Request arguments.
+		*
+		* @return int
+		*/
+	final public function preserve_auth_on_redirect( $redirect_count, $r ) {
+		// Allow more redirects for private repos
+		return 10;
+	}
+
+	/**
+		* Preserve authorization header during redirect requests.
+		*
+		* @param string $location Redirect location.
+		* @param array  $headers  Request headers.
+		* @param string $data     Request data.
+		* @param array  $options  Request options.
+		* @param object $original Original request object.
+		*
+		* @return void
+		*/
+	final public function preserve_auth_header( $location, &$headers, $data, &$options, $original ) {
+		// Preserve Authorization header for GitHub redirects
+		if ( isset( $original->headers['Authorization'] ) ) {
+			$headers['Authorization'] = $original->headers['Authorization'];
+			
+			// Debug logging
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Git Updater - Preserving auth header on redirect to: ' . $location );
+				error_log( 'Git Updater - Auth header: ' . $headers['Authorization'] );
+			}
+		}
 	}
 }
