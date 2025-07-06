@@ -476,6 +476,18 @@ class GitHub_API extends API implements API_Interface {
 			]
 		);
 
+		add_settings_field(
+			'github_use_fine_grained',
+			esc_html__( 'Use Fine-grained Personal Access Token', 'git-updater' ),
+			[ Singleton::get_instance( 'Settings', $this ), 'checkbox_callback' ],
+			'git_updater_github_install_settings',
+			'github_access_token',
+			[
+				'id'    => 'github_use_fine_grained',
+				'class' => 'checkbox',
+			]
+		);
+
 		/*
 		 * Show section for private GitHub repositories.
 		 */
@@ -517,6 +529,9 @@ class GitHub_API extends API implements API_Interface {
 	 */
 	public function print_section_github_access_token() {
 		esc_html_e( 'Enter your personal GitHub.com or GitHub Enterprise Access Token to avoid API access limits.', 'git-updater' );
+		echo '<br><small>';
+		esc_html_e( 'For private repositories, use Fine-grained personal access tokens and check the option below.', 'git-updater' );
+		echo '</small>';
 		$icon = plugin_dir_url( dirname( __DIR__, 2 ) ) . 'assets/github-logo.svg';
 		printf( '<img class="git-oauth-icon" src="%s" alt="GitHub logo" />', esc_attr( $icon ) );
 	}
@@ -531,6 +546,14 @@ class GitHub_API extends API implements API_Interface {
 			'github_access_token',
 			esc_html__( 'GitHub Access Token', 'git-updater' ),
 			[ $this, 'github_access_token' ],
+			'git_updater_install_' . $type,
+			$type
+		);
+		
+		add_settings_field(
+			'github_use_fine_grained',
+			esc_html__( 'Use Fine-grained Token', 'git-updater' ),
+			[ $this, 'github_use_fine_grained' ],
 			'git_updater_install_' . $type,
 			$type
 		);
@@ -558,6 +581,22 @@ class GitHub_API extends API implements API_Interface {
 			<br>
 			<span class="description">
 			<?php esc_html_e( 'Enter GitHub Access Token for private GitHub repositories.', 'git-updater' ); ?>
+			</span>
+		</label>
+		<?php
+	}
+
+	/**
+	 * GitHub Fine-grained Token checkbox for remote install.
+	 */
+	public function github_use_fine_grained() {
+		?>
+		<label for="github_use_fine_grained">
+			<input class="github_setting" type="checkbox" id="github_use_fine_grained" name="github_use_fine_grained" value="1">
+			<?php esc_html_e( 'Use Fine-grained personal access token format', 'git-updater' ); ?>
+			<br>
+			<span class="description">
+			<?php esc_html_e( 'Check this if you are using a Fine-grained personal access token for private repositories.', 'git-updater' ); ?>
 			</span>
 		</label>
 		<?php
@@ -593,6 +632,13 @@ class GitHub_API extends API implements API_Interface {
 		 */
 		if ( ! empty( $install['github_access_token'] ) ) {
 			$install['options'][ $install['repo'] ] = $install['github_access_token'];
+		}
+
+		/*
+		 * Add/Save fine-grained token preference if present.
+		 */
+		if ( ! empty( $install['github_use_fine_grained'] ) ) {
+			$install['options'][ $install['repo'] . '_use_fine_grained' ] = $install['github_use_fine_grained'];
 		}
 
 		return $install;

@@ -479,6 +479,21 @@ class Settings {
 					'placeholder' => isset( $setting_field['placeholder'] ) ? true : null,
 				]
 			);
+
+			// Add fine-grained token checkbox for GitHub repositories
+			if ( 'github' === $token->git ) {
+				add_settings_field(
+					$setting_field['id'] . '_use_fine_grained',
+					null,
+					[ $this, 'token_callback_checkbox' ],
+					$setting_field['page'],
+					$setting_field['section'],
+					[
+						'id'    => $setting_field['callback'] . '_use_fine_grained',
+						'title' => esc_html__( 'Use Fine-grained token for this repository', 'git-updater' ),
+					]
+				);
+			}
 		}
 
 		if ( ! $this->waiting_for_background_update() ) {
@@ -506,9 +521,15 @@ class Settings {
 		];
 
 		foreach ( $running_servers as $server ) {
-			$always_unset = array_merge( $always_unset, [ "{$server}_access_token" ] );
+			$always_unset = array_merge( $always_unset, [ "{$server}_access_token", "{$server}_use_fine_grained" ] );
 			$always_unset = array_unique( $always_unset );
 		}
+
+		// Also preserve individual repo fine-grained settings
+		foreach ( $gu_tokens as $token ) {
+			$always_unset[] = $token->slug . '_use_fine_grained';
+		}
+		$always_unset = array_unique( $always_unset );
 
 		array_map(
 			function ( $e ) use ( &$gu_unset_keys ) {
@@ -624,6 +645,21 @@ class Settings {
 		<label for="<?php echo esc_attr( $args['id'] ); ?>">
 			<input type="checkbox" id="<?php echo esc_attr( $args['id'] ); ?>" name="git_updater[<?php echo esc_attr( $args['id'] ); ?>]" value="1" <?php checked( 1, intval( $checked ), true ); ?> <?php disabled( '-1', $checked, true ); ?> >
 			<?php echo esc_attr( $args['title'] ); ?>
+		</label>
+		<?php
+	}
+
+	/**
+	 * Render checkbox settings field.
+	 *
+	 * @param array $args Callback args.
+	 */
+	public function checkbox_callback( $args ) {
+		$checked = self::$options[ $args['id'] ] ?? null;
+		?>
+		<label for="<?php echo esc_attr( $args['id'] ); ?>">
+			<input type="checkbox" id="<?php echo esc_attr( $args['id'] ); ?>" name="git_updater[<?php echo esc_attr( $args['id'] ); ?>]" value="1" <?php checked( 1, intval( $checked ), true ); ?> >
+			<?php esc_html_e( 'Use Fine-grained personal access token format for private repositories', 'git-updater' ); ?>
 		</label>
 		<?php
 	}

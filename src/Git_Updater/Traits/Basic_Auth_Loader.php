@@ -63,7 +63,8 @@ trait Basic_Auth_Loader {
 		}
 		if ( null !== $credentials['token'] ) {
 			if ( 'github' === $credentials['type'] ) {
-				$args['headers']['Authorization'] = 'token ' . $credentials['token'];
+				$auth_format = $credentials['use_fine_grained'] ? 'Bearer ' : 'token ';
+				$args['headers']['Authorization'] = $auth_format . $credentials['token'];
 				$args['headers']['github']        = $credentials['slug'];
 			}
 
@@ -106,12 +107,13 @@ trait Basic_Auth_Loader {
 		$api_domain = apply_filters( 'gu_api_domain', 'api.wordpress.org' );
 
 		$credentials = [
-			'api.wordpress' => isset( $headers['host'] ) === $api_domain ? $headers['host'] : false,
-			'isset'         => false,
-			'token'         => null,
-			'type'          => null,
-			'enterprise'    => null,
-			'slug'          => null,
+			'api.wordpress'    => isset( $headers['host'] ) === $api_domain ? $headers['host'] : false,
+			'isset'            => false,
+			'token'            => null,
+			'type'             => null,
+			'enterprise'       => null,
+			'slug'             => null,
+			'use_fine_grained' => false,
 		];
 
 		if ( $credentials['api.wordpress'] ) {
@@ -135,11 +137,15 @@ trait Basic_Auth_Loader {
 			$token = ! empty( $options[ $slug ] ) ? $options[ $slug ] : $token;
 			$type  = 'github';
 
-			$credentials['type']       = $type;
-			$credentials['isset']      = true;
-			$credentials['token']      = $token ?? null;
-			$credentials['enterprise'] = ! in_array( $headers['host'], [ 'github.com', 'api.github.com' ], true );
-			$credentials['slug']       = $slug;
+			// Check if using Fine-grained personal access token
+			$use_fine_grained = ! empty( $options['github_use_fine_grained'] ) || ! empty( $options[ $slug . '_use_fine_grained' ] );
+
+			$credentials['type']             = $type;
+			$credentials['isset']            = true;
+			$credentials['token']            = $token ?? null;
+			$credentials['enterprise']       = ! in_array( $headers['host'], [ 'github.com', 'api.github.com' ], true );
+			$credentials['slug']             = $slug;
+			$credentials['use_fine_grained'] = $use_fine_grained;
 		}
 
 		// Filter hook args.
